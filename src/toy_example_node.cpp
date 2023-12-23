@@ -3,6 +3,7 @@
 #include <ros/ros.h>
 #include "bkioctomap.h"
 #include "markerarray_pub.h"
+#include <dbg.h>
 
 void load_pcd(std::string filename, semantic_bki::point3f &origin, semantic_bki::PCLPointCloud &cloud) {
     pcl::PCLPointCloud2 cloud2;
@@ -39,8 +40,8 @@ int main(int argc, char **argv) {
     int scan_num = 0;
     double max_range = -1;
 
-    nh.param<std::string>("dir", dir, dir);
-    nh.param<std::string>("prefix", prefix, prefix);
+    nh.param<std::string>("dir", dir, dir);               // 数据集路径
+    nh.param<std::string>("prefix", prefix, prefix);      // 数据集名称
     nh.param<int>("block_depth", block_depth, block_depth);
     nh.param<double>("sf2", sf2, sf2);
     nh.param<double>("ell", ell, ell);
@@ -73,8 +74,9 @@ int main(int argc, char **argv) {
             "max_range: " << max_range
             );
 
-    /////////////////////// Semantic CSM //////////////////////
-    semantic_bki::SemanticBKIOctoMap map_csm(resolution, 1, num_class, sf2, ell, prior, var_thresh, free_thresh, occupied_thresh);
+    /////////////////////// Semantic CSM //////////////////////  semantic counting sensor model
+    semantic_bki::SemanticBKIOctoMap map_csm(resolution, 1, num_class, sf2, ell, prior, 
+                                             var_thresh, free_thresh, occupied_thresh);
     ros::Time start = ros::Time::now();
     for (int scan_id = 1; scan_id <= scan_num; ++scan_id) {
         semantic_bki::PCLPointCloud cloud;
@@ -97,7 +99,7 @@ int main(int argc, char **argv) {
             int semantics = it.get_node().get_semantics();
             m_pub_csm.insert_point3d_semantics(p.x(), p.y(), p.z(), it.get_size(), semantics, 0);
             std::vector<float> vars(num_class);
-            it.get_node().get_vars(vars);
+            it.get_node().get_vars(vars);    // 得到当前node的vars
             if (vars[semantics] > max_var)
 		          max_var = vars[semantics];
 		        if (vars[semantics] < min_var)
@@ -154,6 +156,7 @@ int main(int argc, char **argv) {
 		          min_var = vars[semantics];
         }
     }
+
     m_pub.publish();
     std::cout << "max_var: " << max_var << std::endl;
     std::cout << "min_var: " << min_var << std::endl;

@@ -248,7 +248,7 @@ namespace semantic_bki {
                 return !(this->operator==(other));
             }
 
-            LeafIterator operator++(int) {
+            const LeafIterator operator++(int) {          // 后置++
                 LeafIterator result(*this);
                 ++(*this);
                 return result;
@@ -263,6 +263,7 @@ namespace semantic_bki {
                         end_leaf = block_it->second->end_leaf();
                     }
                 }
+                return *this;
             }
 
             SemanticOcTreeNode &operator*() const {

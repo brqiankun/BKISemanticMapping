@@ -265,6 +265,7 @@ namespace semantic_bki {
       return color;
     }
 
+    // 根据不同的类别得到所属的颜色
     std_msgs::ColorRGBA KITTISemanticMapColor(int c) {
       std_msgs::ColorRGBA color;
       color.a = 1.0;
