@@ -9,6 +9,7 @@ void load_pcd(std::string filename, semantic_bki::point3f &origin, semantic_bki:
     pcl::PCLPointCloud2 cloud2;
     Eigen::Vector4f _origin;
     Eigen::Quaternionf orientaion;
+    // 从xxx.pcd中读取并转换为pointcloud
     pcl::io::loadPCDFile(filename, cloud2, _origin, orientaion);
     pcl::fromPCLPointCloud2(cloud2, cloud);
     origin.x() = _origin[0];
@@ -74,6 +75,29 @@ int main(int argc, char **argv) {
             "max_range: " << max_range
             );
 
+    // visual the pcd 
+    ros::Publisher raw_pc_pub = nh.advertise<sensor_msgs::PointCloud2>("raw_pc", 1);
+    ros::Publisher origin_pc_pub = nh.advertise<sensor_msgs::PointCloud2>("origin_pc", 1);
+    pcl::PointCloud<pcl::PointXYZL> raw_pc;
+    pcl::PointCloud<pcl::PointXYZ> origin_pc;
+    sensor_msgs::PointCloud2 raw_pc_msg;
+    sensor_msgs::PointCloud2 origin_pc_msg;
+    for (int scan_id = 1; scan_id <= scan_num; ++scan_id) {
+        semantic_bki::PCLPointCloud cloud;
+        semantic_bki::point3f origin;
+        std::string filename(dir + "/" + prefix + "_" + std::to_string(scan_id) + ".pcd");
+        load_pcd(filename, origin, cloud);
+        std::printf("origin: x: %f, y: %f, z: %f\n", origin.x(), origin.y(), origin.z());
+        pcl::PointXYZ origin_point {origin.x(), origin.y(), origin.z()};
+        raw_pc += cloud;
+        origin_pc.points.push_back(origin_point);
+        ROS_INFO_STREAM("Scan " << scan_id << " done");
+    }
+    pcl::toROSMsg(raw_pc, raw_pc_msg);
+    raw_pc_msg.header.frame_id = "map";
+    pcl::toROSMsg(origin_pc, origin_pc_msg);
+    origin_pc_msg.header.frame_id = "map";
+
     /////////////////////// Semantic CSM //////////////////////  semantic counting sensor model
     semantic_bki::SemanticBKIOctoMap map_csm(resolution, 1, num_class, sf2, ell, prior, 
                                              var_thresh, free_thresh, occupied_thresh);
@@ -83,11 +107,13 @@ int main(int argc, char **argv) {
         semantic_bki::point3f origin;
         std::string filename(dir + "/" + prefix + "_" + std::to_string(scan_id) + ".pcd");
         load_pcd(filename, origin, cloud);
+        std::printf("origin: x: %f, y: %f, z: %f\n", origin.x(), origin.y(), origin.z());
+        //                        点云(包含label)，sensor origin， 地图分辨率，地图free space采样分辨率， 最大范围
         map_csm.insert_pointcloud_csm(cloud, origin, resolution, free_resolution, max_range);
-        ROS_INFO_STREAM("Scan " << scan_id << " done");
+        ROS_INFO_STREAM("Scan " << scan_id << " done\n");
     }
     ros::Time end = ros::Time::now();
-    ROS_INFO_STREAM("Semantic CSM finished in " << (end - start).toSec() << "s");
+    ROS_INFO_STREAM("Semantic CSM finished in " << (end - start).toSec() << "s\n");
 
     /////////////////////// Publish Map //////////////////////
     float max_var = std::numeric_limits<float>::min();
@@ -125,18 +151,20 @@ int main(int argc, char **argv) {
 
     
     /////////////////////// Semantic BKI //////////////////////
-    semantic_bki::SemanticBKIOctoMap map(resolution, block_depth, num_class, sf2, ell, prior, var_thresh, free_thresh, occupied_thresh);
+    semantic_bki::SemanticBKIOctoMap map(resolution, block_depth, num_class, sf2, ell, prior, 
+                                         var_thresh, free_thresh, occupied_thresh);
     start = ros::Time::now();
     for (int scan_id = 1; scan_id <= scan_num; ++scan_id) {
         semantic_bki::PCLPointCloud cloud;
         semantic_bki::point3f origin;
         std::string filename(dir + "/" + prefix + "_" + std::to_string(scan_id) + ".pcd");
         load_pcd(filename, origin, cloud);
+        std::printf("origin: x: %f, y: %f, z: %f\n", origin.x(), origin.y(), origin.z());
         map.insert_pointcloud(cloud, origin, resolution, free_resolution, max_range);
         ROS_INFO_STREAM("Scan " << scan_id << " done");
     }
     end = ros::Time::now();
-    ROS_INFO_STREAM("Semantic BKI finished in " << (end - start).toSec() << "s");
+    ROS_INFO_STREAM("Semantic BKI finished in " << (end - start).toSec() << "s\n");
  
     
     /////////////////////// Publish Map //////////////////////
@@ -173,6 +201,15 @@ int main(int argc, char **argv) {
         }
     }
     v_pub.publish();
+
+    ros::Rate loop_rate(0.1);
+    while (ros::ok()) {
+        raw_pc_pub.publish(raw_pc_msg);
+        origin_pc_pub.publish(origin_pc_msg);
+        ros::spinOnce();
+        ROS_INFO_STREAM("raw_pc and origin_pc done\n");
+        loop_rate.sleep();
+    }
 
     ros::spin();
 

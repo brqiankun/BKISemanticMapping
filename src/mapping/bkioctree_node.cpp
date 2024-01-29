@@ -41,6 +41,7 @@ namespace semantic_bki {
       std::vector<float> probs(num_class);
       get_probs(probs);
 
+      // 找出probs中最大值对应的下标作为semantics
       semantics = std::distance(probs.begin(), std::max_element(probs.begin(), probs.end()));
 
       if (semantics == 0)

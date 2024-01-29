@@ -6,7 +6,7 @@
 
 using std::vector;
 
-// #define DEBUG true;
+#define DEBUG true;
 
 #ifdef DEBUG
 
@@ -221,6 +221,7 @@ namespace semantic_bki {
     }
 
 
+    // 每insert一片点云，则完成一次更新
     void SemanticBKIOctoMap::insert_pointcloud(const PCLPointCloud &cloud, const point3f &origin, float ds_resolution,
                                       float free_res, float max_range) {
 
@@ -231,6 +232,7 @@ namespace semantic_bki {
         ////////// Preparation //////////////////////////
         /////////////////////////////////////////////////
         GPPointCloud xy;
+        // 提取所有点的信息到xy中(包括beam sample)
         get_training_data(cloud, origin, ds_resolution, free_res, max_range, xy);
 #ifdef DEBUG
         Debug_Msg("Training data size: " << xy.size());
@@ -242,11 +244,14 @@ namespace semantic_bki {
         }
 
         point3f lim_min, lim_max;
+        // 得到当前点云坐标的最小和最大值(整个点云的bbox)
         bbox(xy, lim_min, lim_max);
 
         vector<BlockHashKey> blocks;
+        // 根据bbox(最大范围)得到block(根据分辨率求得的方块尺寸)的hash索引
         get_blocks_in_bbox(lim_min, lim_max, blocks);
 
+        // 将xy中的所有点的位置放入到tree结构中
         for (auto it = xy.cbegin(); it != xy.cend(); ++it) {
             float p[] = {it->first.x(), it->first.y(), it->first.z()};
             rtree.Insert(p, p, const_cast<GPPointType *>(&*it));
@@ -260,8 +265,10 @@ namespace semantic_bki {
 #ifdef OPENMP
 #pragma omp parallel for schedule(dynamic)
 #endif
+        // 对每个block进行S-BKI处理
         for (int i = 0; i < blocks.size(); ++i) {
             BlockHashKey key = blocks[i];
+            // 得到当前block附近的共7个block(包括当前block + 上下前后左右)
             ExtendedBlock eblock = get_extended_block(key);
             if (has_gp_points_in_bbox(eblock))
 #ifdef OPENMP
@@ -374,6 +381,7 @@ namespace semantic_bki {
     void SemanticBKIOctoMap::get_training_data(const PCLPointCloud &cloud, const point3f &origin, float ds_resolution,
                                       float free_resolution, float max_range, GPPointCloud &xy) const {
         PCLPointCloud sampled_hits;
+        // 将输入点云进行降采样
         downsample(cloud, sampled_hits, ds_resolution);
 
         PCLPointCloud frees;
@@ -382,17 +390,20 @@ namespace semantic_bki {
         xy.clear();
         for (auto it = sampled_hits.begin(); it != sampled_hits.end(); ++it) {
             point3f p(it->x, it->y, it->z);
-            if (max_range > 0) {
+            if (max_range > 0) {    // 剔除max_range范围外的点
                 double l = (p - origin).norm();
                 if (l > max_range)
                     continue;
             }
             
+            // xy中存储的是当点的3d坐标和点的label
             xy.emplace_back(p, it->label);
 
+            // 当前点和原点之间的free sample点
             PointCloud frees_n;
             beam_sample(p, origin, frees_n, free_resolution);
 
+            // 将原点放入free中
             PCLPointType p_origin = PCLPointType();
             p_origin.x = origin.x();
             p_origin.y = origin.y();
@@ -400,6 +411,7 @@ namespace semantic_bki {
             p_origin.label = 0;
             frees.push_back(p_origin);
             
+            // free sample的label都设置为0
             for (auto p = frees_n.begin(); p != frees_n.end(); ++p) {
                 PCLPointType p_free = PCLPointType();
                 p_free.x = p->x();
@@ -412,8 +424,10 @@ namespace semantic_bki {
         }
 
         PCLPointCloud sampled_frees;    
+        // 对当前点对应的free sample进行下采样  
         downsample(frees, sampled_frees, ds_resolution);
 
+        // 将beam free sample存储到xy中
         for (auto it = sampled_frees.begin(); it != sampled_frees.end(); ++it) {
             xy.emplace_back(point3f(it->x, it->y, it->z), 0.0f);
         }
