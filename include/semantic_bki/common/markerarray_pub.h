@@ -400,6 +400,39 @@ namespace semantic_bki {
         return color;
     }
 
+    std_msgs::ColorRGBA BrMapColor(int c ) {
+      std_msgs::ColorRGBA color;
+      color.a = 1.0;
+
+      switch (c) {
+        case 1:  // green
+          color.r = 0;
+          color.g = 192.0 / 255;
+          color.b = 0;
+          break;
+          
+        case 2:  // yellow
+          color.r = 255.0 / 255;
+          color.g = 215.0 / 255;
+          color.b = 0;
+          break;
+
+        case 3:  // building
+          color.r = 192.0 / 255;
+          color.g = 0;
+          color.b = 0;
+          break;
+
+        default:
+          color.r = 1;
+          color.g = 1;
+          color.b = 1;
+          break;
+      }
+
+      return color;
+    }
+
     class MarkerArrayPub {
         typedef pcl::PointXYZ PointType;
         typedef pcl::PointCloud<PointType> PointCloud;
@@ -466,12 +499,16 @@ namespace semantic_bki {
                 depth = (int) log2(size / 0.1);
 
             msg->markers[depth].points.push_back(center);
+            // 根据不同的dataset选择显示颜色
             switch (dataset) {
               case 1:
                 msg->markers[depth].colors.push_back(KITTISemanticMapColor(c));
                 break;
               case 2:
                 msg->markers[depth].colors.push_back(SemanticKITTISemanticMapColor(c));
+                break;
+              case 3:
+                msg->markers[depth].colors.push_back(BrMapColor(c));
                 break;
               default:
                 msg->markers[depth].colors.push_back(SemanticMapColor(c));
